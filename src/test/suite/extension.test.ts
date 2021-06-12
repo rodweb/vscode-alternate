@@ -51,4 +51,38 @@ suite("Extension Test Suite", () => {
       testFile.path
     );
   });
+
+  test("multiple: switches to file.unit.test.ts", async function () {
+    const config = vscode.workspace.getConfiguration();
+    await config.update(
+      "alternate.patterns",
+      [
+        {
+          main: "(.*).js$",
+          alternates: ["$1.unit.test.js", "$1.integration.test.js"],
+        },
+      ],
+      vscode.ConfigurationTarget.Global
+    );
+    const [file] = await vscode.workspace.findFiles("multiple/file.js");
+    assert.strictEqual(Boolean(file), true);
+    const document = await vscode.workspace.openTextDocument(file);
+    await vscode.window.showTextDocument(document);
+    assert.strictEqual(
+      vscode.window.activeTextEditor?.document.fileName,
+      file.path
+    );
+    (vscode.window.showQuickPick as any) = function () {
+      return Promise.resolve("file.unit.test.js");
+    };
+    await vscode.commands.executeCommand("alternate.helloWorld");
+    const [testFile] = await vscode.workspace.findFiles(
+      "multiple/file.unit.test.js"
+    );
+    assert.strictEqual(Boolean(testFile), true);
+    assert.strictEqual(
+      vscode.window.activeTextEditor?.document.fileName,
+      testFile.path
+    );
+  });
 });
