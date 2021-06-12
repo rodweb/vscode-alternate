@@ -11,12 +11,19 @@ export function activate(context: vscode.ExtensionContext) {
   // Use the console to output diagnostic information (console.log) and errors (console.error)
   // This line of code will only be executed once when your extension is activated
   console.log('Congratulations, your extension "alternate" is now active!');
-  
-  vscode.window.onDidChangeActiveTextEditor(editor => {
+
+  vscode.window.onDidChangeActiveTextEditor((editor) => {
     if (editor) {
       console.log(`Current file changed: ${editor.document.fileName}`);
     }
   });
+
+  interface Pattern {
+    main: string;
+    alternates: string[];
+  }
+
+  type Patterns = Pattern[];
 
   // The command has been defined in the package.json file
   // Now provide the implementation of the command with registerCommand
@@ -28,16 +35,14 @@ export function activate(context: vscode.ExtensionContext) {
       // Display a message box to the user
       const editor = vscode.window.activeTextEditor;
       const fileName = editor?.document.fileName || "";
-      const replacementPatterns = [
-        "$1.test.$2",
-        "$1.spec.$2",
-        "$1.unit.test.$2",
-        "$1.integration.test.$2",
-      ];
-      const mapping = new Map([
-        [/(\/.*).(ts|js)$/, replacementPatterns],
-        [/(\/.*)\/src\/(.*).(ts|js)$/, ["$1/src/test/suite/$2.test.$3"]],
-      ]);
+      const config = vscode.workspace.getConfiguration("alternate");
+      const patterns = config.inspect<Patterns>("patterns")?.globalValue;
+      if (!patterns) {
+        return;
+      }
+      const mapping = new Map(
+        patterns.map(({ main, alternates }) => [new RegExp(main), alternates])
+      );
       if (fileName) {
         for (const re of mapping.keys()) {
           const match = fileName.match(re);
@@ -83,14 +88,15 @@ export function activate(context: vscode.ExtensionContext) {
 
               if (existing.length > 1) {
                 const picked = await vscode.window.showQuickPick(
-                  existing.map(item => path.basename(item))
+                  existing.map((item) => path.basename(item))
                 );
                 console.log(`Picked: ${picked}`);
                 if (picked) {
-                  const doc = await vscode.workspace.openTextDocument(
-                    Uri.file(picked)
+                  const baseToFilename = new Map(
+                    existing.map((item) => [path.basename(item), item])
                   );
-                  await vscode.window.showTextDocument(doc);
+                  const file = baseToFilename.get(picked)!;
+                  await switchToFile(context, file);
                   return;
                 }
               }
@@ -98,16 +104,7 @@ export function activate(context: vscode.ExtensionContext) {
                 if (!file) {
                   continue;
                 }
-                console.log(file);
-                const prev = vscode.window.activeTextEditor?.document?.fileName;
-                if (prev) {
-                  console.log("Setting previous doc");
-                  context.globalState.update("prev", prev);
-                }
-                const doc = await vscode.workspace.openTextDocument(
-                  Uri.file(file)
-                );
-                await vscode.window.showTextDocument(doc);
+                await switchToFile(context, file);
                 break;
               }
             } else {
@@ -128,3 +125,14 @@ export function activate(context: vscode.ExtensionContext) {
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
+
+async function switchToFile(context: vscode.ExtensionContext, file: string) {
+  console.log(`Switching to file ${file}`);
+  const prev = vscode.window.activeTextEditor?.document?.fileName;
+  if (prev) {
+    console.log("Setting previous doc");
+    context.globalState.update("prev", prev);
+  }
+  const doc = await vscode.workspace.openTextDocument(Uri.file(file));
+  await vscode.window.showTextDocument(doc);
+}

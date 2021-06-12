@@ -19,7 +19,29 @@
 				"command": "alternate.helloWorld",
 				"title": "Hello World"
 			}
-		]
+		],
+		"configuration": {
+			"title": "Alternate",
+			"properties": {
+				"alternate.patterns": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"main": {
+								"type": "string"
+							},
+							"alternates": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
