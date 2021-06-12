@@ -25,12 +25,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   type Patterns = Pattern[];
 
+  class GlobalState {
+    static previousFile = "previousFile";
+  };
+
   // The command has been defined in the package.json file
   // Now provide the implementation of the command with registerCommand
   // The commandId parameter must match the command field in package.json
   let disposable = vscode.commands.registerCommand(
     "alternate.helloWorld",
     async () => {
+      console.log('Running === >');
       // The code you place here will be executed every time your command is executed
       // Display a message box to the user
       const editor = vscode.window.activeTextEditor;
@@ -47,7 +52,6 @@ export function activate(context: vscode.ExtensionContext) {
         for (const re of mapping.keys()) {
           const match = fileName.match(re);
           if (match) {
-            console.log(match);
             const replacements = mapping.get(re);
             if (replacements) {
               const alternates = replacements.map((replacement) =>
@@ -55,7 +59,6 @@ export function activate(context: vscode.ExtensionContext) {
                   .slice(1)
                   .reduce((xs, x, i) => xs.replace(`$${i + 1}`, x), replacement)
               );
-              console.log(alternates);
 
               const exists = (file: string) =>
                 new Promise<string | null>((resolve, reject) =>
@@ -68,43 +71,41 @@ export function activate(context: vscode.ExtensionContext) {
                   })
                 );
 
-              const existing = (
+              const alternateFiles = (
                 await Promise.all(alternates.map(exists))
               ).filter(Boolean) as string[];
-              if (existing.length === 0) {
-                console.log("Alternate files not found");
-                const prev = context.globalState.get<string>("prev");
-                if (prev) {
-                  const doc = await vscode.workspace.openTextDocument(
-                    Uri.file(prev)
-                  );
-                  await vscode.window.showTextDocument(doc);
-                  context.globalState.update("prev", undefined);
+              if (alternateFiles.length === 0) {
+                console.log("Multiple alternate files not found");
+                const previousFile = getPreviousFile();
+                if (previousFile) {
+                  console.log(`Found previous file ${previousFile}`);
+                  await switchToFile(previousFile);
+                  await clearPreviousFile();
                 } else {
-                  console.log("Previous doc not found");
+                  console.log("Previous file not found");
                 }
                 continue;
               }
 
-              if (existing.length > 1) {
-                const picked = await vscode.window.showQuickPick(
-                  existing.map((item) => path.basename(item))
+              if (alternateFiles.length > 1) {
+                const filePicked = await vscode.window.showQuickPick(
+                  alternateFiles.map((item) => path.basename(item))
                 );
-                console.log(`Picked: ${picked}`);
-                if (picked) {
+                console.log(`Picked file ${filePicked}`);
+                if (filePicked) {
                   const baseToFilename = new Map(
-                    existing.map((item) => [path.basename(item), item])
+                    alternateFiles.map((item) => [path.basename(item), item])
                   );
-                  const file = baseToFilename.get(picked)!;
-                  await switchToFile(context, file);
+                  const file = baseToFilename.get(filePicked)!;
+                  await switchToFile(file);
                   return;
                 }
               }
-              for (const file of existing) {
-                if (!file) {
+              for (const fileName of alternateFiles) {
+                if (!fileName) {
                   continue;
                 }
-                await switchToFile(context, file);
+                await switchToFile(fileName);
                 break;
               }
             } else {
@@ -120,19 +121,31 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  function getPreviousFile() {
+    return context.globalState.get<string>(GlobalState.previousFile);
+  }
+
+  async function updatePreviousFile() {
+    const file = vscode.window.activeTextEditor?.document?.fileName;
+    if (file) {
+      console.log(`Setting previous file to ${file}`);
+      await context.globalState.update(GlobalState.previousFile, file);
+    }
+  }
+
+  async function clearPreviousFile() {
+    await context.globalState.update(GlobalState.previousFile, undefined);
+  }
+
+  async function switchToFile(file: string) {
+    await updatePreviousFile();
+    console.log(`Switching to file ${file}`);
+    const doc = await vscode.workspace.openTextDocument(Uri.file(file));
+    await vscode.window.showTextDocument(doc);
+  }
+
   context.subscriptions.push(disposable);
 }
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
-
-async function switchToFile(context: vscode.ExtensionContext, file: string) {
-  console.log(`Switching to file ${file}`);
-  const prev = vscode.window.activeTextEditor?.document?.fileName;
-  if (prev) {
-    console.log("Setting previous doc");
-    context.globalState.update("prev", prev);
-  }
-  const doc = await vscode.workspace.openTextDocument(Uri.file(file));
-  await vscode.window.showTextDocument(doc);
-}
