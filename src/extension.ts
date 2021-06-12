@@ -39,8 +39,11 @@ export function activate(context: vscode.ExtensionContext) {
       // The code you place here will be executed every time your command is executed
       // Display a message box to the user
       const currentFile = vscode.window.activeTextEditor?.document.fileName;
+      console.log("currentFile ok");
       const config = vscode.workspace.getConfiguration("alternate");
+      console.log("config ok");
       const patterns = config.inspect<Patterns>("patterns")?.globalValue;
+      console.log("patterns ok");
       if (!patterns) {
         console.log("No patterns configured");
         return;
@@ -48,6 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
       const patternsMap = new Map(
         patterns.map(({ main, alternates }) => [new RegExp(main), alternates])
       );
+      console.log("pattern map ok");
       if (!currentFile) {
         console.log("Current file not found");
         return;
