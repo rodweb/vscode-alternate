@@ -5,6 +5,17 @@ import * as fs from "fs";
 import * as path from "path";
 import { Uri } from "vscode";
 
+interface Pattern {
+  main: string;
+  alternates: string[];
+}
+
+export type Patterns = Pattern[];
+
+class GlobalState {
+  static previousFile = "previousFile";
+}
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -17,17 +28,6 @@ export function activate(context: vscode.ExtensionContext) {
       console.log(`Current file changed: ${editor.document.fileName}`);
     }
   });
-
-  interface Pattern {
-    main: string;
-    alternates: string[];
-  }
-
-  type Patterns = Pattern[];
-
-  class GlobalState {
-    static previousFile = "previousFile";
-  }
 
   // The command has been defined in the package.json file
   // Now provide the implementation of the command with registerCommand
@@ -48,8 +48,19 @@ export function activate(context: vscode.ExtensionContext) {
         console.log("No patterns configured");
         return;
       }
+      const validPatterns = patterns.filter((pattern) => {
+        try {
+          return Boolean(new RegExp(pattern.main));
+        } catch (err) {
+          console.error(err);
+          return false;
+        }
+      });
       const patternsMap = new Map(
-        patterns.map(({ main, alternates }) => [new RegExp(main), alternates])
+        validPatterns.map(({ main, alternates }) => [
+          new RegExp(main),
+          alternates,
+        ])
       );
       console.log("pattern map ok");
       if (!currentFile) {
