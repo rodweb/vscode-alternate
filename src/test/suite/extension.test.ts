@@ -6,19 +6,13 @@ import { commands, ConfigurationTarget, window, workspace } from "vscode";
 import { Patterns } from "../../extension";
 
 describe("Alternate", () => {
-  window.showInformationMessage("Start all tests.");
-  const originalQuickPickStub = window.showQuickPick;
+  const originalQuickPick = window.showQuickPick;
 
   afterEach(() => clearConfig());
-  afterEach(() => (window.showQuickPick = originalQuickPickStub.bind(window)));
-
-  // TODO: add test to avoid jumping back to original file when current open text document has changed
-  // TODO: add test for key binding configuration
-  // TODO: add test for multiple alternate files fast switching (alt + a, alt + 1)
-  // TODO: add test for bi-directional alternate (file.test.ts -> file.ts)
+  afterEach(() => (window.showQuickPick = originalQuickPick.bind(window)));
 
   context("when alternate.patterns config is missing", () => {
-    it("should no throw", async () => {
+    it("should not throw", async () => {
       await commands.executeCommand("alternate.run");
     });
   });
@@ -35,21 +29,32 @@ describe("Alternate", () => {
   context("when there is only one alternate file", () => {
     it("should switch to that file", async () => {
       await configureForSingleAlternate();
-      await openFile("alternate/file.js");
-      await expectFileToBeActive("alternate/file.js");
+      await openFile("single/file.js");
+      await expectFileToBeActive("single/file.js");
       await commands.executeCommand("alternate.run");
-      await expectFileToBeActive("alternate/file.test.js");
+      await expectFileToBeActive("single/file.test.js");
     });
 
     context("and alternating again", () => {
       it("should jump back to the main file", async () => {
         await configureForSingleAlternate();
-        await openFile("alternate/file.js");
+        await openFile("single/file.js");
         await commands.executeCommand("alternate.run");
-        await expectFileToBeActive("alternate/file.test.js");
+        await expectFileToBeActive("single/file.test.js");
         await commands.executeCommand("alternate.run");
-        await expectFileToBeActive("alternate/file.js");
+        await expectFileToBeActive("single/file.js");
       });
+    });
+  });
+
+  context("when switching files after alternating", () => {
+    it("should not jump back to the previous main file", async () => {
+      await configureForSingleAlternate();
+      await openFile("single/file.js");
+      await commands.executeCommand("alternate.run");
+      await openFile("single/other.js");
+      await commands.executeCommand("alternate.run");
+      await expectFileToBeActive("single/other.test.js");
     });
   });
 
@@ -58,7 +63,7 @@ describe("Alternate", () => {
       await configureForMultipleAlternates();
       await openFile("multiple/file.js");
       await expectFileToBeActive("multiple/file.js");
-      setQuickPickStub(function () {
+      stubQuickPick(function () {
         return Promise.resolve("file.integration.test.js");
       });
       await commands.executeCommand("alternate.run");
@@ -69,7 +74,7 @@ describe("Alternate", () => {
       await configureForMultipleAlternates();
       await openFile("multiple/file.js");
       await expectFileToBeActive("multiple/file.js");
-      setQuickPickStub(function () {
+      stubQuickPick(function () {
         return Promise.resolve(undefined);
       });
       await commands.executeCommand("alternate.run");
@@ -114,7 +119,7 @@ async function configureForMultipleAlternates() {
   ]);
 }
 
-async function setQuickPickStub(stubFunction: Function) {
+async function stubQuickPick(stubFunction: Function) {
   (window.showQuickPick as any) = stubFunction;
 }
 
