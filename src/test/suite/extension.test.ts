@@ -86,10 +86,11 @@ describe("Alternate", () => {
 async function expectFileToBeActive(file: string) {
   const [found] = await workspace.findFiles(file);
   assert.strictEqual(Boolean(found), true, `Expected ${file} to be found.`);
+  const activeFile = window.activeTextEditor?.document.fileName;
   assert.strictEqual(
-    window.activeTextEditor?.document.fileName.endsWith(file),
+    activeFile?.endsWith(file),
     true,
-    `Expected ${found} to be active`
+    `Expected ${found} to be active but instead found ${activeFile}`
   );
 }
 
@@ -130,9 +131,9 @@ function restoreQuickPick() {
 
 async function setConfig<T>(key: string, value: T) {
   const config = workspace.getConfiguration();
-  await config.update(key, value, ConfigurationTarget.Global);
+  await config.update(key, value, ConfigurationTarget.Workspace);
 }
 
 async function clearConfig() {
-  await setConfig("alternate.patterns", []);
+  await setConfig("alternate.patterns", undefined);
 }

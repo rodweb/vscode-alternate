@@ -32,7 +32,7 @@ export function activate(context: ExtensionContext) {
 
   let disposable = commands.registerCommand("alternate.run", async () => {
     const config = workspace.getConfiguration("alternate");
-    const patterns = config.inspect<Patterns>("patterns")?.globalValue;
+    const patterns = config.get<Patterns>("patterns");
     if (!patterns) {
       logger.log("No patterns configured.");
       return;
@@ -107,6 +107,7 @@ export function activate(context: ExtensionContext) {
       // select first file as fallback
       logger.log("Falling back to first matching file.");
       await switchToFile(alternateFiles[0]);
+      return;
     }
   });
 

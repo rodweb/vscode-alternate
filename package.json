@@ -42,7 +42,24 @@
                 }
               }
             }
-          }
+          },
+          "default": [
+            {
+              "main": "(/.*?).((t|j)sx?)$",
+              "alternates": [
+                "$1.test.$2",
+                "$1.spec.$2",
+                "$1.unit.test.$2",
+                "$1.integration.test.$2"
+              ]
+            },
+            {
+              "main": "(/.*?)(.unit|.integration)?.(test|spec).((t|j)sx?)$",
+              "alternates": [
+                "$1.$4"
+              ]
+            }
+          ]
         }
       }
     },
