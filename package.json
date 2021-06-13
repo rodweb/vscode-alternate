@@ -17,7 +17,7 @@
     "commands": [
       {
         "command": "alternate.run",
-        "title": "Hello World"
+        "title": "Alternate"
       }
     ],
     "configuration": {
@@ -41,7 +41,14 @@
           }
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "alternate.run",
+        "key": "alt+a",
+        "when": "editorTextFocus"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
