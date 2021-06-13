@@ -7,10 +7,11 @@ import { Patterns } from "../../extension";
 
 describe("Alternate", () => {
   window.showInformationMessage("Start all tests.");
+  const originalQuickPickStub = window.showQuickPick;
 
   afterEach(() => clearConfig());
+  afterEach(() => (window.showQuickPick = originalQuickPickStub.bind(window)));
 
-  // TODO: add test for multiple path alternate files (/src/file.test.ts and /test/file.test.ts)
   // TODO: add test to avoid jumping back to original file when current open text document has changed
   // TODO: add test for key binding configuration
   // TODO: add test for multiple alternate files fast switching (alt + a, alt + 1)
@@ -31,120 +32,90 @@ describe("Alternate", () => {
     });
   });
 
-  context("when alternating to a file", () => {
+  context("when there is only one alternate file", () => {
+    it("should switch to that file", async () => {
+      await configureForSingleAlternate();
+      await openFile("alternate/file.js");
+      await expectFileToBeActive("alternate/file.js");
+      await commands.executeCommand("alternate.run");
+      await expectFileToBeActive("alternate/file.test.js");
+    });
+
     context("and alternating again", () => {
       it("should jump back to the main file", async () => {
-        await setMinimalConfig();
+        await configureForSingleAlternate();
+        await openFile("alternate/file.js");
+        await commands.executeCommand("alternate.run");
+        await expectFileToBeActive("alternate/file.test.js");
+        await commands.executeCommand("alternate.run");
         await expectFileToBeActive("alternate/file.js");
-        await commands.executeCommand("alternate.run");
-        await commands.executeCommand("alternate.run");
-        assert.strictEqual(
-          window.activeTextEditor?.document.fileName.endsWith(
-            "alternate/file.js"
-          ),
-          true
-        );
       });
     });
   });
 
-  it("switches to file.test.ts", async function () {
-    await setConfig<Patterns>("alternate.patterns", [
-      {
-        main: "(.*).(js)$",
-        alternates: ["$1.test.$2"],
-      },
-    ]);
-    const [file] = await workspace.findFiles("alternate/file.js");
-    assert.strictEqual(Boolean(file), true);
-    const document = await workspace.openTextDocument(file);
-    await window.showTextDocument(document);
-    assert.strictEqual(window.activeTextEditor?.document.fileName, file.path);
-    await commands.executeCommand("alternate.run");
-    const [testFile] = await workspace.findFiles("alternate/file.test.js");
-    assert.strictEqual(Boolean(testFile), true);
-    assert.strictEqual(
-      window.activeTextEditor?.document.fileName,
-      testFile.path
-    );
-  });
+  context("when there are many alternate files", () => {
+    it("should switch to the selected file", async () => {
+      await configureForMultipleAlternates();
+      await openFile("multiple/file.js");
+      await expectFileToBeActive("multiple/file.js");
+      setQuickPickStub(function () {
+        return Promise.resolve("file.integration.test.js");
+      });
+      await commands.executeCommand("alternate.run");
+      await expectFileToBeActive("multiple/file.integration.test.js");
+    });
 
-  it("multiple: switches to file.integration.test.ts", async function () {
-    const config = workspace.getConfiguration();
-    await config.update(
-      "alternate.patterns",
-      [
-        {
-          main: "(.*).js$",
-          alternates: ["$1.unit.test.js", "$1.integration.test.js"],
-        },
-      ],
-      ConfigurationTarget.Global
-    );
-    const [file] = await workspace.findFiles("multiple/file.js");
-    assert.strictEqual(Boolean(file), true);
-    const document = await workspace.openTextDocument(file);
-    await window.showTextDocument(document);
-    assert.strictEqual(window.activeTextEditor?.document.fileName, file.path);
-    (window.showQuickPick as any) = function () {
-      return Promise.resolve("file.integration.test.js");
-    };
-    await commands.executeCommand("alternate.run");
-    const [testFile] = await workspace.findFiles(
-      "multiple/file.integration.test.js"
-    );
-    assert.strictEqual(Boolean(testFile), true);
-    assert.strictEqual(
-      window.activeTextEditor?.document.fileName,
-      testFile.path
-    );
-  });
-
-  it("fallback: switches to file.unit.test.ts", async function () {
-    const config = workspace.getConfiguration();
-    await config.update(
-      "alternate.patterns",
-      [
-        {
-          main: "(.*).js$",
-          alternates: ["$1.unit.test.js", "$1.integration.test.js"],
-        },
-      ],
-      ConfigurationTarget.Global
-    );
-    const [file] = await workspace.findFiles("multiple/file.js");
-    assert.strictEqual(Boolean(file), true);
-    const document = await workspace.openTextDocument(file);
-    await window.showTextDocument(document);
-    assert.strictEqual(window.activeTextEditor?.document.fileName, file.path);
-    (window.showQuickPick as any) = function () {
-      return Promise.resolve(undefined);
-    };
-    await commands.executeCommand("alternate.run");
-    const [testFile] = await workspace.findFiles("multiple/file.unit.test.js");
-    assert.strictEqual(Boolean(testFile), true);
-    assert.strictEqual(
-      window.activeTextEditor?.document.fileName,
-      testFile.path
-    );
+    it("should switch to the first match if no file is selected", async () => {
+      await configureForMultipleAlternates();
+      await openFile("multiple/file.js");
+      await expectFileToBeActive("multiple/file.js");
+      setQuickPickStub(function () {
+        return Promise.resolve(undefined);
+      });
+      await commands.executeCommand("alternate.run");
+      await expectFileToBeActive("multiple/file.unit.test.js");
+    });
   });
 });
 
 async function expectFileToBeActive(file: string) {
   const [found] = await workspace.findFiles(file);
   assert.strictEqual(Boolean(found), true);
-  assert.strictEqual(found.path.endsWith(file), true);
+  assert.strictEqual(
+    window.activeTextEditor?.document.fileName.endsWith(file),
+    true
+  );
+}
+
+async function openFile(file: string) {
+  const [found] = await workspace.findFiles(file);
+  if (!found) {
+    return;
+  }
   const document = await workspace.openTextDocument(found);
   await window.showTextDocument(document);
 }
 
-async function setMinimalConfig() {
+async function configureForSingleAlternate() {
   await setConfig<Patterns>("alternate.patterns", [
     {
       main: "(.*).(js)$",
       alternates: ["$1.test.$2"],
     },
   ]);
+}
+
+async function configureForMultipleAlternates() {
+  await setConfig<Patterns>("alternate.patterns", [
+    {
+      main: "(.*).js$",
+      alternates: ["$1.unit.test.js", "$1.integration.test.js"],
+    },
+  ]);
+}
+
+async function setQuickPickStub(stubFunction: Function) {
+  (window.showQuickPick as any) = stubFunction;
 }
 
 async function setConfig<T>(key: string, value: T) {
