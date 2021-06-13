@@ -23,6 +23,10 @@
     "configuration": {
       "title": "Alternate",
       "properties": {
+        "alternate.debug": {
+          "type": "boolean",
+          "default": false
+        },
         "alternate.patterns": {
           "type": "array",
           "items": {

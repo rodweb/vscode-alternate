@@ -1,6 +1,6 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import * as vscode from "vscode";
+import { workspace, window, commands, ExtensionContext } from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { Uri } from "vscode";
@@ -18,11 +18,13 @@ class GlobalState {
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: ExtensionContext) {
+  const logger = new Logger();
+
   context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor((editor) => {
+    window.onDidChangeActiveTextEditor((editor) => {
       if (editor) {
-        console.log(`Current file changed: ${editor.document.fileName}`);
+        logger.log(`Current file changed: ${editor.document.fileName}`);
       }
     })
   );
@@ -30,107 +32,98 @@ export function activate(context: vscode.ExtensionContext) {
   // The command has been defined in the package.json file
   // Now provide the implementation of the command with registerCommand
   // The commandId parameter must match the command field in package.json
-  let disposable = vscode.commands.registerCommand(
-    "alternate.run",
-    async () => {
-      console.log("Running === >");
-      // The code you place here will be executed every time your command is executed
-      // Display a message box to the user
-      const currentFile = vscode.window.activeTextEditor?.document.fileName;
-      console.log("currentFile ok");
-      const config = vscode.workspace.getConfiguration("alternate");
-      console.log("config ok");
-      const patterns = config.inspect<Patterns>("patterns")?.globalValue;
-      console.log("patterns ok");
-      if (!patterns) {
-        console.log("No patterns configured");
-        return;
+  let disposable = commands.registerCommand("alternate.run", async () => {
+    logger.log("Running === >");
+    // The code you place here will be executed every time your command is executed
+    // Display a message box to the user
+    const currentFile = window.activeTextEditor?.document.fileName;
+    logger.log("currentFile ok");
+    const config = workspace.getConfiguration("alternate");
+    logger.log("config ok");
+    const patterns = config.inspect<Patterns>("patterns")?.globalValue;
+    logger.log("patterns ok");
+    if (!patterns) {
+      logger.log("No patterns configured");
+      return;
+    }
+    const validPatterns = patterns.filter((pattern) => {
+      try {
+        return Boolean(new RegExp(pattern.main));
+      } catch (error) {
+        logger.log(error);
+        return false;
       }
-      const validPatterns = patterns.filter((pattern) => {
-        try {
-          return Boolean(new RegExp(pattern.main));
-        } catch (err) {
-          console.error(err);
-          return false;
-        }
-      });
-      const patternsMap = new Map(
-        validPatterns.map(({ main, alternates }) => [
-          new RegExp(main),
-          alternates,
-        ])
+    });
+    const patternsMap = new Map(
+      validPatterns.map(({ main, alternates }) => [
+        new RegExp(main),
+        alternates,
+      ])
+    );
+    logger.log("pattern map ok");
+    if (!currentFile) {
+      logger.log("Current file not found");
+      return;
+    }
+    for (const pattern of patternsMap.keys()) {
+      const match = currentFile.match(pattern);
+      if (!match) {
+        logger.log("Match not found");
+        continue;
+      }
+      const replacements = patternsMap.get(pattern);
+      if (!replacements) {
+        logger.log(`Replacaments not found for pattern ${pattern}`);
+        continue;
+      }
+      const alternates = replacements.map((replacement) =>
+        match.reduce((xs, x, i) => xs.replace(`$${i}`, x), replacement)
       );
-      console.log("pattern map ok");
-      if (!currentFile) {
-        console.log("Current file not found");
-        return;
+
+      const alternateFiles = (await Promise.all(alternates.map(exists))).filter(
+        Boolean
+      ) as string[];
+      if (alternateFiles.length === 0) {
+        logger.log("Multiple alternate files not found");
+        const previousFile = getPreviousFile();
+        if (previousFile) {
+          logger.log(`Found previous file ${previousFile}`);
+          await switchToFile(previousFile);
+          await clearPreviousFile();
+        } else {
+          logger.log("Previous file not found");
+        }
+        continue;
       }
-      for (const pattern of patternsMap.keys()) {
-        const match = currentFile.match(pattern);
-        if (!match) {
-          console.log("Match not found");
-          continue;
-        }
-        const replacements = patternsMap.get(pattern);
-        if (!replacements) {
-          console.log(`Replacaments not found for pattern ${pattern}`);
-          continue;
-        }
-        const alternates = replacements.map((replacement) =>
-          match.reduce((xs, x, i) => xs.replace(`$${i}`, x), replacement)
+
+      // multiple options, show quick pick
+      if (alternateFiles.length > 1) {
+        const pickedFile = await window.showQuickPick(
+          alternateFiles.map((item) => path.basename(item))
         );
-
-        const alternateFiles = (
-          await Promise.all(alternates.map(exists))
-        ).filter(Boolean) as string[];
-        if (alternateFiles.length === 0) {
-          console.log("Multiple alternate files not found");
-          const previousFile = getPreviousFile();
-          if (previousFile) {
-            console.log(`Found previous file ${previousFile}`);
-            await switchToFile(previousFile);
-            await clearPreviousFile();
-          } else {
-            console.log("Previous file not found");
-          }
-          continue;
-        }
-
-        // multiple options, show quick pick
-        if (alternateFiles.length > 1) {
-          const pickedFile = await vscode.window.showQuickPick(
-            alternateFiles.map((item) => path.basename(item))
+        logger.log(`Picked file ${pickedFile}`);
+        if (pickedFile) {
+          const baseToFilename = new Map(
+            alternateFiles.map((item) => [path.basename(item), item])
           );
-          console.log(`Picked file ${pickedFile}`);
-          if (pickedFile) {
-            const baseToFilename = new Map(
-              alternateFiles.map((item) => [path.basename(item), item])
-            );
-            const file = baseToFilename.get(pickedFile)!;
-            await switchToFile(file);
-            return;
-          }
-        }
-
-        // select first file as fallback
-        for (const file of alternateFiles) {
-          if (!file) {
-            continue;
-          }
+          const file = baseToFilename.get(pickedFile)!;
           await switchToFile(file);
           return;
         }
       }
+
+      // select first file as fallback
+      await switchToFile(alternateFiles[0]);
     }
-  );
+  });
 
   const getPreviousFile = () =>
     context.globalState.get<string>(GlobalState.previousFile);
 
   const updatePreviousFile = async () => {
-    const file = vscode.window.activeTextEditor?.document?.fileName;
+    const file = window.activeTextEditor?.document?.fileName;
     if (file) {
-      console.log(`Setting previous file to ${file}`);
+      logger.log(`Setting previous file to ${file}`);
       await context.globalState.update(GlobalState.previousFile, file);
     }
   };
@@ -140,9 +133,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   const switchToFile = async (file: string) => {
     await updatePreviousFile();
-    console.log(`Switching to file ${file}`);
-    const doc = await vscode.workspace.openTextDocument(Uri.file(file));
-    await vscode.window.showTextDocument(doc);
+    logger.log(`Switching to file ${file}`);
+    const doc = await workspace.openTextDocument(Uri.file(file));
+    await window.showTextDocument(doc);
   };
 
   const exists = (file: string) =>
@@ -161,3 +154,16 @@ export function activate(context: vscode.ExtensionContext) {
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
+
+class Logger {
+  private enabled = Boolean(
+    workspace.getConfiguration("alternate").get("debug")
+  );
+  private channel = window.createOutputChannel("Alternate");
+
+  log(message: string) {
+    if (this.enabled) {
+      this.channel.appendLine(message);
+    }
+  }
+}

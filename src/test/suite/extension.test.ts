@@ -85,10 +85,11 @@ describe("Alternate", () => {
 
 async function expectFileToBeActive(file: string) {
   const [found] = await workspace.findFiles(file);
-  assert.strictEqual(Boolean(found), true);
+  assert.strictEqual(Boolean(found), true, `Expected ${file} to be found.`);
   assert.strictEqual(
     window.activeTextEditor?.document.fileName.endsWith(file),
-    true
+    true,
+    `Expected ${found} to be active`
   );
 }
 
