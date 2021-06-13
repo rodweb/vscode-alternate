@@ -20,7 +20,7 @@ describe("Alternate", () => {
 
   context("when alternate.patterns config is missing", () => {
     it("should no throw", async () => {
-      await commands.executeCommand("alternate.helloWorld");
+      await commands.executeCommand("alternate.run");
     });
   });
 
@@ -29,7 +29,7 @@ describe("Alternate", () => {
       await setConfig<Patterns>("alternate.patterns", [
         { main: "\\", alternates: [] },
       ]);
-      await commands.executeCommand("alternate.helloWorld");
+      await commands.executeCommand("alternate.run");
     });
   });
 
@@ -45,7 +45,7 @@ describe("Alternate", () => {
     const document = await workspace.openTextDocument(file);
     await window.showTextDocument(document);
     assert.strictEqual(window.activeTextEditor?.document.fileName, file.path);
-    await commands.executeCommand("alternate.helloWorld");
+    await commands.executeCommand("alternate.run");
     const [testFile] = await workspace.findFiles("alternate/file.test.js");
     assert.strictEqual(Boolean(testFile), true);
     assert.strictEqual(
@@ -74,7 +74,7 @@ describe("Alternate", () => {
     (window.showQuickPick as any) = function () {
       return Promise.resolve("file.integration.test.js");
     };
-    await commands.executeCommand("alternate.helloWorld");
+    await commands.executeCommand("alternate.run");
     const [testFile] = await workspace.findFiles(
       "multiple/file.integration.test.js"
     );
@@ -105,7 +105,7 @@ describe("Alternate", () => {
     (window.showQuickPick as any) = function () {
       return Promise.resolve(undefined);
     };
-    await commands.executeCommand("alternate.helloWorld");
+    await commands.executeCommand("alternate.run");
     const [testFile] = await workspace.findFiles("multiple/file.unit.test.js");
     assert.strictEqual(Boolean(testFile), true);
     assert.strictEqual(
