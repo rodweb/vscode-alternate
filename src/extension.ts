@@ -4,6 +4,7 @@ import { workspace, window, commands, ExtensionContext } from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { Uri } from "vscode";
+import { Logger } from "./logger";
 
 interface Pattern {
   main: string;
@@ -29,21 +30,11 @@ export function activate(context: ExtensionContext) {
     })
   );
 
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
   let disposable = commands.registerCommand("alternate.run", async () => {
-    logger.log("Running === >");
-    // The code you place here will be executed every time your command is executed
-    // Display a message box to the user
-    const currentFile = window.activeTextEditor?.document.fileName;
-    logger.log("currentFile ok");
     const config = workspace.getConfiguration("alternate");
-    logger.log("config ok");
     const patterns = config.inspect<Patterns>("patterns")?.globalValue;
-    logger.log("patterns ok");
     if (!patterns) {
-      logger.log("No patterns configured");
+      logger.log("No patterns configured.");
       return;
     }
     const validPatterns = patterns.filter((pattern) => {
@@ -60,20 +51,20 @@ export function activate(context: ExtensionContext) {
         alternates,
       ])
     );
-    logger.log("pattern map ok");
+    const currentFile = window.activeTextEditor?.document.fileName;
     if (!currentFile) {
-      logger.log("Current file not found");
+      logger.log("No active file.");
       return;
     }
     for (const pattern of patternsMap.keys()) {
       const match = currentFile.match(pattern);
       if (!match) {
-        logger.log("Match not found");
+        logger.log("No match found.");
         continue;
       }
       const replacements = patternsMap.get(pattern);
       if (!replacements) {
-        logger.log(`Replacaments not found for pattern ${pattern}`);
+        logger.log(`Not replacement found for ${pattern}`);
         continue;
       }
       const alternates = replacements.map((replacement) =>
@@ -84,25 +75,26 @@ export function activate(context: ExtensionContext) {
         Boolean
       ) as string[];
       if (alternateFiles.length === 0) {
-        logger.log("Multiple alternate files not found");
+        logger.log("No alternate file found.");
         const previousFile = getPreviousFile();
         if (previousFile) {
-          logger.log(`Found previous file ${previousFile}`);
+          logger.log("Previous file found.");
           await switchToFile(previousFile);
           await clearPreviousFile();
         } else {
-          logger.log("Previous file not found");
+          logger.log("No previous file found.");
         }
         continue;
       }
 
       // multiple options, show quick pick
       if (alternateFiles.length > 1) {
+        logger.log("Multiple alternate files found.");
         const pickedFile = await window.showQuickPick(
           alternateFiles.map((item) => path.basename(item))
         );
-        logger.log(`Picked file ${pickedFile}`);
         if (pickedFile) {
+          logger.log(`Picked file ${pickedFile}`);
           const baseToFilename = new Map(
             alternateFiles.map((item) => [path.basename(item), item])
           );
@@ -113,6 +105,7 @@ export function activate(context: ExtensionContext) {
       }
 
       // select first file as fallback
+      logger.log("Falling back to first matching file.");
       await switchToFile(alternateFiles[0]);
     }
   });
@@ -154,16 +147,3 @@ export function activate(context: ExtensionContext) {
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
-
-class Logger {
-  private enabled = Boolean(
-    workspace.getConfiguration("alternate").get("debug")
-  );
-  private channel = window.createOutputChannel("Alternate");
-
-  log(message: string) {
-    if (this.enabled) {
-      this.channel.appendLine(message);
-    }
-  }
-}
