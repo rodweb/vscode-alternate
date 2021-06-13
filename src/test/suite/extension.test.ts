@@ -5,11 +5,11 @@ import * as assert from "assert";
 import { commands, ConfigurationTarget, window, workspace } from "vscode";
 import { Patterns } from "../../extension";
 
-describe("Alternate", () => {
-  const originalQuickPick = window.showQuickPick;
+const originalQuickPick = window.showQuickPick;
 
-  afterEach(() => clearConfig());
-  afterEach(() => (window.showQuickPick = originalQuickPick.bind(window)));
+describe("Alternate", () => {
+  afterEach(clearConfig);
+  afterEach(restoreQuickPick);
 
   context("when alternate.patterns config is missing", () => {
     it("should not throw", async () => {
@@ -121,6 +121,10 @@ async function configureForMultipleAlternates() {
 
 async function stubQuickPick(stubFunction: Function) {
   (window.showQuickPick as any) = stubFunction;
+}
+
+function restoreQuickPick() {
+  window.showQuickPick = originalQuickPick.bind(window);
 }
 
 async function setConfig<T>(key: string, value: T) {
